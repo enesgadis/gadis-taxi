@@ -1,8 +1,19 @@
 # Deploys — bilgisayar kapaliyken calismasi icin
 
-Repo: https://github.com/enesgadis/gadis-taxi (main)
+**CANLI:**
+- Backend: https://saas-backend-ojxb.onrender.com ✅ (webhook bağlandı)
+- Frontend: https://gadis-taxi-alpha.vercel.app
+- Repo: https://github.com/enesgadis/gadis-taxi (main)
 
-## 1) Neon (Postgres) — ücretsiz
+## Kalan adımlar
+1. **Render → backend env var:** `FRONTEND_URL=https://gadis-taxi-alpha.vercel.app` ekle + redeploy
+   (Mini App "🚕 Uygulamayı Aç" butonu bu adrese yönelir)
+2. **Vercel → frontend env var:** `NEXT_PUBLIC_API_URL=https://saas-backend-ojxb.onrender.com` + Redeploy
+3. **Render Shell:** `bin/rails db:seed` (demo taksiler/gelirler)
+4. Solid Queue hatırlatıcılar (aynı shell): `bin/rails db:queue:prepare` gerekirse; sonrasindan
+   env `SOLID_QUEUE_IN_PUMA=true` + redeploy
+
+## 1) Neon (Postgres) — done
 1. https://neon.tech → GitHub ile giriş
 2. New Project (region: Frankfurt)
 3. **Connection string** (postgresql://...) kopyala → `DATABASE_URL` olarak kullanılacak
