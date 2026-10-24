@@ -1,0 +1,108 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+:root {
+  --bg-main: #090d16;
+  --bg-card: rgba(18, 24, 38, 0.75);
+  --bg-card-hover: rgba(28, 36, 56, 0.85);
+  --border: rgba(255, 255, 255, 0.08);
+  --border-focus: rgba(250, 204, 21, 0.4);
+  --primary: #facc15;
+  --primary-glow: rgba(250, 204, 21, 0.25);
+  --emerald: #10b981;
+  --emerald-glow: rgba(16, 185, 129, 0.2);
+  --blue: #38bdf8;
+  --purple: #a855f7;
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --whatsapp: #25d366;
+  --whatsapp-glow: rgba(37, 211, 102, 0.25);
+}
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+body {
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  background-color: var(--bg-main);
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(250, 204, 21, 0.08) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(37, 211, 102, 0.08) 0px, transparent 50%),
+    radial-gradient(at 50% 100%, rgba(56, 189, 248, 0.05) 0px, transparent 50%);
+  color: var(--text-main);
+  min-height: 100vh;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+code, pre {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Glassmorphism containers */
+.glass-panel {
+  background: var(--bg-card);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+  transition: all 0.2s ease-in-out;
+}
+
+.glass-panel:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+/* Pulse animation for live indicators */
+@keyframes pulseGlow {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.15);
+  }
+}
+
+.live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--emerald);
+  box-shadow: 0 0 12px var(--emerald);
+  display: inline-block;
+  animation: pulseGlow 2s infinite ease-in-out;
+}
+
+.live-dot-whatsapp {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--whatsapp);
+  box-shadow: 0 0 12px var(--whatsapp);
+  display: inline-block;
+  animation: pulseGlow 1.8s infinite ease-in-out;
+}
