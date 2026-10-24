@@ -35,7 +35,8 @@ port ENV.fetch("PORT", 3001)
 plugin :tmp_restart
 
 # Run the Solid Queue supervisor inside of Puma for single-server deployments (fork not supported on Windows).
-plugin :solid_queue unless Gem.win_platform?
+# SOLID_QUEUE_IN_PUMA=false → tamamen devre dışı (tablolar hazırlanmadan da boot edebilmek için)
+plugin :solid_queue if !Gem.win_platform? && ENV.fetch("SOLID_QUEUE_IN_PUMA", "false") == "true"
 
 # Specify the PID file. Defaults to tmp/pids/server.pid in development.
 # In other environments, only set the PID file if requested.
