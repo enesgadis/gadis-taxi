@@ -1,0 +1,9 @@
+development:
+  adapter: async
+
+test:
+  adapter: test
+
+production:
+  adapter: solid_cable
+  channel_prefix: backend_production

@@ -1,0 +1,22 @@
+# secrets & env
+.env
+.env.*
+*.local
+**/.env
+**/.env.*
+
+# deps & build
+node_modules/
+.next/
+out/
+dist/
+
+# rails
+backend/log/
+backend/tmp/
+backend/storage/
+backend/.bundle/
+
+# editor/OS
+.DS_Store
+Thumbs.db
