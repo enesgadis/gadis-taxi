@@ -200,7 +200,13 @@ class AiInboundService
 
   def self.process_driver(driver:, chat_id:, text:, channel: "telegram")
     profile = { name: driver.name, phone: driver.phone, plate: driver.plate, durum: driver.status }
-    result = AssistantService.parse(text: text.to_s.strip, profile: profile, role: "driver")
+    chat_key = channel == "telegram" ? "tg_driver_#{chat_id}" : "driver_#{chat_id}"
+    
+    # Şoförün geçmiş sohbet hafızasını al ve yeni mesajı kaydet
+    history = ChatMessage.history_for(chat_key, 10)
+    ChatMessage.log!(chat_key, "user", text.to_s.strip)
+
+    result = AssistantService.parse(text: text.to_s.strip, profile: profile, role: "driver", history: history)
     Rails.logger.info "[AI-INBOUND] driver ##{driver.id} intent=#{result[:intent]} ai=#{result[:ai] ? 'gemini' : 'kural'}"
 
     case result[:intent].to_s
@@ -216,10 +222,14 @@ class AiInboundService
         suggested_action: analysis[:suggested_action],
         channel: "telegram_driver"
       )
-      notify(chat_id, channel, "🚨 Bildiriminiz kaydedildi.\n\n#{analysis[:reply]}")
+      reply_text = "🚨 Bildiriminiz kaydedildi.\n\n#{analysis[:reply]}"
+      notify(chat_id, channel, reply_text)
+      ChatMessage.log!(chat_key, "bot", reply_text)
       { success: true, action: "complaint" }
     else
-      notify(chat_id, channel, result[:reply].presence || "🤖 Şoför komutları için 'çağrılar', 'kabul 13' gibi yazabilirsiniz.")
+      reply_text = result[:reply].presence || "🤖 Şoför komutları için 'çağrılar', 'kabul 13' gibi yazabilirsiniz."
+      notify(chat_id, channel, reply_text)
+      ChatMessage.log!(chat_key, "bot", reply_text)
       { success: true, action: "info" }
     end
   end
