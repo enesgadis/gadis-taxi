@@ -15,6 +15,19 @@ class TelegramService
     end
   end
 
+  def self.send_chat_action(chat_id:, action: "typing")
+    return if chat_id.blank?
+    token = ENV.fetch("TELEGRAM_BOT_TOKEN", "TEST_TELEGRAM_TOKEN")
+    return if token == "TEST_TELEGRAM_TOKEN"
+    uri = URI("https://api.telegram.org/bot#{token}/sendChatAction")
+    http = Net::HTTP.new(uri.host, uri.port)
+    http.use_ssl = true
+    http.read_timeout = 5
+    req = Net::HTTP::Post.new(uri.path, { "Content-Type" => "application/json" })
+    req.body = { chat_id: chat_id, action: action }.to_json
+    http.request(req) rescue nil
+  end
+
   def self.send_message(chat_id:, text:)
     return { success: false } if chat_id.blank?
 

@@ -5,22 +5,37 @@ class Api::V1::MiniappController < ApplicationController
   def init
     raw = params[:init_data].to_s
     data = MiniappService.verify_init_data(raw)
-    if data.nil?
-      # Tünel/test ortamında imza doğrulaması başarısızsa kullanıcı id'siyle düş
-      tg_user_id = params[:telegram_id].presence
-      return render json: { role: nil }, status: :unauthorized if tg_user_id.blank?
-      user = { "id" => tg_user_id, "first_name" => params[:name].to_s }
-    else
-      tg_user = data.dig("user")
-      return render json: { role: nil }, status: :unauthorized if tg_user.blank?
-      user = { "id" => tg_user["id"].to_s, "first_name" => tg_user["first_name"].to_s, "last_name" => tg_user["last_name"].to_s }
+    
+    user = nil
+    if data.present?
+      # MiniappService.verify_init_data doğrudan parsed user hash'ini veya user anahtarlı hash'i dönebilir
+      tg_user = data.is_a?(Hash) && data.key?("user") ? data["user"] : data
+      if tg_user.is_a?(Hash) && tg_user["id"].present?
+        user = {
+          "id" => tg_user["id"].to_s,
+          "first_name" => tg_user["first_name"].to_s,
+          "last_name" => tg_user["last_name"].to_s
+        }
+      end
     end
 
+    # İmzalı veri gelmediyse veya test/fallback ise gelen parametreden al
+    if user.nil? && params[:telegram_id].present?
+      user = {
+        "id" => params[:telegram_id].to_s,
+        "first_name" => params[:name].to_s,
+        "last_name" => ""
+      }
+    end
+
+    return render json: { role: nil, error: "Telegram kullanıcısı tespit edilemedi" }, status: :unauthorized if user.nil?
+
+    # 1. Öncelik: Şoför olarak kayıtlı mı?
     driver = Driver.find_by(telegram_id: user["id"])
     if driver
       return render json: {
         role: "driver",
-        profile: driver.as_json(only: [:id, :name, :phone, :plate, :latitude, :longitude, :status])
+        profile: driver.as_json(only: [:id, :name, :phone, :plate, :latitude, :longitude, :status, :telegram_id])
       }
     end
 

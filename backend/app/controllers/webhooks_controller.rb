@@ -110,8 +110,11 @@ class WebhooksController < ApplicationController
           telegram_id: chat_id
         )
       elsif msg["text"].present?
+        # Kullanıcıya bekleme hissi vermemek için anında 'yazıyor...' (typing) aksiyonu gönder
+        TelegramService.send_chat_action(chat_id: chat_id, action: "typing")
+
         # Rol-farkındalıklı GERÇEK AI akışı: her metin Gemini ile anlaşılıp
-        # taksi çağırma / randevu / şikayet / bilgiye dönüşür.
+        # taksi çağırma / randevu / şikayet / sohbet / bilgiye dönüşür.
         passenger = MessageInboundService.find_passenger(
           sender_key: "tg_#{chat_id}",
           name: name,

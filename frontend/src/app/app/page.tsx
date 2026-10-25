@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React, { useEffect, useState } from 'react';
 import { API_URL } from '@/lib/api';
@@ -21,19 +21,42 @@ export default function TelegramMiniAppShell() {
     (async () => {
       await loadTelegramSDK();
       const { initData, user } = initTelegramWebApp();
-      const inTelegram = Boolean(initData);
+      const inTelegram = Boolean(initData) || Boolean(user?.id);
 
-      if (inTelegram && initData) {
-        // Gerçek Telegram Mini App girişini: HMAC imzalı initData → backend
+      if (inTelegram) {
+        // 1. HMAC imzalı initData ile backend'e sor (şoför mü, yolcu mu?)
+        const payload: Record<string, unknown> = {};
+        if (initData) payload.init_data = initData;
+        if (user?.id) {
+          payload.telegram_id = user.id;
+          payload.name = user.name;
+        }
+
         const res = await fetch(`${API_URL}/api/v1/auth/telegram_init`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ init_data: initData }),
+          body: JSON.stringify(payload),
         }).catch(() => null);
+
         const data = await res?.json().catch(() => null);
         if (res?.ok && data?.role) {
           setRole(data.role);
           setProfile(data.profile);
+          setTg(true);
+          setBooting(false);
+          return;
+        }
+
+        // Eğer backend erişilemedi ama user verisi geldiyse, en azından yolcu modunda aç
+        if (user?.id) {
+          setRole('passenger');
+          setProfile({
+            id: user.id,
+            name: user.name || `Kullanıcı ${user.id}`,
+            phone: `tg_${user.id}`,
+            telegram_id: String(user.id),
+            channel: 'telegram'
+          });
           setTg(true);
           setBooting(false);
           return;
@@ -49,19 +72,6 @@ export default function TelegramMiniAppShell() {
       } else if (savedPassenger) {
         setRole('passenger');
         setProfile(JSON.parse(savedPassenger));
-      } else if (user) {
-        // imza bulunamadı ama Telegram kullanıcı verisi var → telegram_id ile düş
-        const res = await fetch(`${API_URL}/api/v1/auth/telegram_init`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ telegram_id: user.id, name: user.name }),
-        }).catch(() => null);
-        const data = await res?.json().catch(() => null);
-        if (res?.ok && data?.role) {
-          setRole(data.role);
-          setProfile(data.profile);
-          setTg(true);
-        }
       }
       setBooting(false);
     })();

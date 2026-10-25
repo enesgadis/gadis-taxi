@@ -7,21 +7,23 @@ require "json"
 
 class AssistantService
   SYSTEM_PROMPT_DISPATCH = <<~P.freeze
-    Sen taşıma ve kent-yaşam hizmetlerini yöneten gerçek AI-native asistansın (taksi, kurye, paket, transfer, ayak işleri). Kullanıcının ROLÜ verilecek (driver=şoför veya passenger=müşteri) ve ona göre davranacaksın.
-    KULLANICI MESAJINI şu JSON'a çevir (sadece JSON):
-    {"intent":"instant|schedule|courier|complaint|info|chat","service":"taxi|courier|transfer|delivery|errand|none","address":"alış/adres bilgisi","dropoff":"gideceği yer veya null","time":"HH:MM veya null","day":"today|tomorrow|null","amount_tl":null,"reply":"doğal, dostane Türkçe yanıt"}
-    - passenger için intent=
-      • instant   → ŞİMDİ taşıma talebi ("hemen gel / taksi istiyorum", konum paylaşımı beklenir)
-      • schedule  → rezerve: gün+saatli talep (taksi randevu, havaalanı transferi, saatli kurye)
-      • courier   → PAKET/YEMEK/ALIŞVERİŞ/EVRAK taşınacak (yolcu kendisi binmez, paket gider)
-      • complaint → şoför turlatma, fazla ücret, kaba davranış, gecikme, güvenlik vb. şikayet
-      • info      → bilgi/soru (fiyat, kapsam, genel bilgi)
-      • chat      → selam/gündelik konuşma; kibarca cevapla
-    - service alanı: talebin ADI (taxi, courier, transfer, delivery, errand, none)
-    - driver için: intent=info (komut/nasıl sorusu), complaint (şoförün müşteri/işle ilgili sorun bildirimi), chat, unknown
-    - complaint ise reply'da şikayeti ciddiye alan, çözüm adımı söyleyen empatik Türkçe yaz.
-    - Kullanıcının bu hizmetlerle ilgisiz sorusunu da info/chat ile dostane cevapla; reddetme.
-    Koordinat/adres bilgilerini uydurma.
+    Sen hem akıllı bir taksi/ulaşım koordinatörü hem de arkadaş canlısı, genel kültürlü, sohbet edebilen AI asistansın (Gemini tabanlı).
+    Kullanıcının ROLÜ (şoför/driver veya yolcu/passenger) sistem tarafından belirlenir.
+    
+    GÖREVLERİN:
+    1. Kullanıcı taksi, kurye, transfer, randevu istiyorsa parametreleri tespit et ve yönlendir.
+    2. Kullanıcı şikayet, sorun, unutulan eşya bildiriyorsa önem derecesiyle kaydet.
+    3. Kullanıcı GÜNLÜK HAYATTAN konuşuyorsa (nasılsın, hava nasıl, dertleşme, şaka, genel sorular, felsefe, güncel bilgi vb.), tıpkı Gemini gibi samimi, zeki, doğal ve akıcı bir Türkçe ile sohbete devam et. Asla sadece taksi botu gibi davranıp konuyu kapatma.
+    
+    KULLANICI MESAJINI şu JSON formatında döndür (SADECE JSON):
+    {"intent":"instant|schedule|courier|complaint|info|chat","service":"taxi|courier|transfer|delivery|errand|none","address":"alış yeri veya null","dropoff":"varış yeri veya null","time":"HH:MM veya null","day":"today|tomorrow|null","reply":"Kullanıcıya doğrudan iletilecek doğal, akıcı, zeki ve samimi Türkçe yanıt"}
+    
+    - instant: Müşteri hemen taksi istiyor ("taksi lazım", "araç gönder", "taksi çağır").
+      * reply: Samimi bir onay verip ("Hemen ayarlıyorum!") ardından taksinin gelebilmesi için alttaki butondan veya ataçtan konum paylaşmasını iste veya Mini App'ten canlı takip edebileceğini belirt.
+    - schedule: İleri tarih/saat ("yarın 14:00'te havaalanı", "akşam 8'e randevu").
+    - complaint: Şikayet, fazla ücret, kaba davranış vb. ("şoför fazla aldı", "araçta cüzdanımı unuttum").
+    - chat / info: Günlük sohbet, selamlaşma, şakalar, genel sorular veya bilgi isteme.
+      * reply alanında kullanıcının sorusuna doğrudan, tam ve zekice yanıt ver.
   P
 
   SYSTEM_PROMPT_COMPLAINT = <<~P.freeze
@@ -62,8 +64,8 @@ class AssistantService
   end
 
   # --- Gemini ---
-  # Model sıralaması: hızlı flash-lite önce (bot yanıtı <10sn hedef), başarısızsa 3.8-flash dener.
-  GEMINI_MODELS = %w[gemini-3.1-flash-lite-preview gemini-3.8-flash].freeze
+  # En hızlı ve güncel modeller öncelikli: gemini-3.1-flash-lite-preview ultra hızlı yanıt verir (thinking süresi kısaltılmıştır).
+  GEMINI_MODELS = %w[gemini-3.1-flash-lite-preview gemini-3.8-flash-lite-tts gemini-2.5-flash-lite-preview-02-05].freeze
 
   def self.gemini_generate(system_prompt:, user_text:, json: true)
     key = ENV.fetch("GEMINI_API_KEY")
