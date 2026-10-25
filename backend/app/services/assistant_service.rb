@@ -63,38 +63,60 @@ class AssistantService
     JSON.parse(hash.to_json, symbolize_names: true)
   end
 
-  # --- Gemini ---
-  # Kararlı, hızlı ve 200 OK yanıt veren modeller:
-  GEMINI_MODELS = %w[gemini-3.5-flash gemini-3.6-flash gemini-3.7-flash gemini-3.8-flash].freeze
+  # --- Gemini Çoklu Model & Otomatik Kota Geçişi ---
+  # Google her modele ayrı günlük kota (RPD) verir.
+  # Biri 429 (Kota doldu) veya 503 verirse anında bir sonrakine geçer.
+  GEMINI_MODELS = %w[gemini-3.5-flash gemini-3.6-flash gemini-3.7-flash gemini-3.8-flash gemini-3.1-flash-lite].freeze
 
   def self.gemini_generate(system_prompt:, user_text:, json: true)
-    key = ENV.fetch("GEMINI_API_KEY")
+    # Birden fazla ücretsiz anahtar virgülle girilebilir: GEMINI_API_KEY="KEY1,KEY2"
+    raw_keys = ENV.fetch("GEMINI_API_KEY", "")
+    keys = raw_keys.split(",").map(&:strip).reject(&:blank?)
+    return nil if keys.empty?
+
     last_error = nil
-    GEMINI_MODELS.each do |model|
-      uri = URI("https://generativelanguage.googleapis.com/v1beta/models/#{model}:generateContent")
-      http = Net::HTTP.new(uri.host, uri.port)
-      http.use_ssl = true
-      http.read_timeout = 45
-      http.open_timeout = 10
-      req = Net::HTTP::Post.new(uri.path, {
-        "Content-Type" => "application/json",
-        "x-goog-api-key" => key
-      })
-      body = {
-        systemInstruction: { parts: [{ text: system_prompt }] },
-        contents: [{ role: "user", parts: [{ text: user_text }] }],
-        generationConfig: json ? { temperature: 0.2, responseMimeType: "application/json" } : { temperature: 0.2 }
-      }
-      req.body = body.to_json
-      res = http.request(req)
-      text = JSON.parse(res.body).dig("candidates", 0, "content", "parts", 0, "text")
-      return text if text.present?
-      last_error = "yanıtsız"
-    rescue StandardError => e
-      last_error = e.message
-      next
+
+    keys.each do |key|
+      GEMINI_MODELS.each do |model|
+        uri = URI("https://generativelanguage.googleapis.com/v1beta/models/#{model}:generateContent")
+        http = Net::HTTP.new(uri.host, uri.port)
+        http.use_ssl = true
+        http.read_timeout = 15
+        http.open_timeout = 5
+        req = Net::HTTP::Post.new(uri.path, {
+          "Content-Type" => "application/json",
+          "x-goog-api-key" => key
+        })
+        body = {
+          systemInstruction: { parts: [{ text: system_prompt }] },
+          contents: [{ role: "user", parts: [{ text: user_text }] }],
+          generationConfig: json ? { temperature: 0.2, responseMimeType: "application/json" } : { temperature: 0.2 }
+        }
+        req.body = body.to_json
+        res = http.request(req)
+
+        # 429 (Rate Limit / Quota Exceeded) veya 503 durumunda sonraki modele geç
+        if res.code.to_i == 429 || res.code.to_i == 503
+          Rails.logger.warn "[Gemini Quota] Model #{model} limit/hata (#{res.code}), sonraki modele geçiliyor..."
+          last_error = "Model #{model} kota aşıldı (#{res.code})"
+          next
+        end
+
+        parsed = JSON.parse(res.body) rescue {}
+        text = parsed.dig("candidates", 0, "content", "parts", 0, "text")
+        if text.present?
+          Rails.logger.info "[Gemini OK] Yanıt alındı: Model=#{model}"
+          return text
+        end
+
+        last_error = parsed.dig("error", "message") || "boş yanıt (#{res.code})"
+      rescue StandardError => e
+        last_error = e.message
+        next
+      end
     end
-    raise "tüm modeller başarısız: #{last_error}"
+
+    raise "Tüm modeller/kotalar tükendi: #{last_error}"
   end
 
   def self.gemini_parse(text, profile, prompt, context: {})
