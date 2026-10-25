@@ -97,8 +97,27 @@ class Api::V1::ComplaintsController < ApplicationController
       }
     P
 
-    raw_ai = AssistantService.gemini_generate(system_prompt: prompt, user_text: "Vakayı analiz et ve karar ver", json: true)
-    ai_data = JSON.parse(raw_ai) rescue {}
+    begin
+      raw_ai = AssistantService.gemini_generate(system_prompt: prompt, user_text: "Vakayı analiz et ve karar ver", json: true)
+      ai_data = JSON.parse(raw_ai) rescue {}
+      ai_data = nil if ai_data.blank? || !ai_data.is_a?(Hash)
+    rescue StandardError => e
+      Rails.logger.error "[AI Resolve Error] #{e.message}"
+      ai_data = nil
+    end
+
+    # AI geçici olarak yanıt veremezse veya kotalar o an doluysa deterministik kural önerisi sun
+    if ai_data.nil?
+      is_overcharge = c.category == "overcharge" || c.severity >= 4
+      ai_data = {
+        "decision" => is_overcharge ? "resolved" : "in_progress",
+        "refund_suggested" => is_overcharge,
+        "refund_amount_tl" => is_overcharge ? 50 : 0,
+        "driver_warning" => is_overcharge ? "Şoför fazla ücret kaydı aldı, rota incelenmeli." : "Standart müşteri geri bildirimi.",
+        "passenger_message" => "Şikayetiniz yönetim tarafından incelenmiştir. Yaşadığınız mağduriyet için özür diler, iyi yolculuklar dileriz.",
+        "reasoning" => "Sistem kural motoru: Kategori (#{c.category}) ve önem derecesi (#{c.severity}/5) baz alınarak oluşturuldu."
+      }
+    end
 
     render json: { success: true, ai_recommendation: ai_data }
   end
