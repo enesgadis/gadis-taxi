@@ -64,8 +64,8 @@ class AssistantService
   end
 
   # --- Gemini ---
-  # En hızlı ve güncel modeller öncelikli: gemini-3.1-flash-lite-preview ultra hızlı yanıt verir (thinking süresi kısaltılmıştır).
-  GEMINI_MODELS = %w[gemini-3.1-flash-lite-preview gemini-3.8-flash-lite-tts gemini-2.5-flash-lite-preview-02-05].freeze
+  # Kararlı, hızlı ve 200 OK yanıt veren modeller:
+  GEMINI_MODELS = %w[gemini-3.5-flash gemini-3.6-flash gemini-3.7-flash gemini-3.8-flash].freeze
 
   def self.gemini_generate(system_prompt:, user_text:, json: true)
     key = ENV.fetch("GEMINI_API_KEY")

@@ -19,12 +19,13 @@ class DriverInboundService
   def self.process(chat_id:, text: nil, location: nil)
     text = text.to_s.strip
 
-    # 0) Menü: "şoför" (telefonsuz) → numara paylaşma klavyesi
+    # 0) Menü: "şoför", "taksiciyim", "ben taksiciyim", "şoför girişi" → numara paylaşma klavyesi
     #    /start → kayıtlı şoförse mini panel; kayıtsızsa yolcu akışına bırak (müşteri girişi)
-    if text.match?(/\A(şoför|sofor|\/şoför|\/sofor)\s*$/i)
+    if text.match?(/\A\s*(şoför|sofor|\/şoför|\/sofor|taksici|taksiciyim|ben taksiciyim|ben şoförüm|şoför arıyorum|sofor arıyorum)\s*$/i) ||
+       text.match?(/(ben\s+taksiciyim|taksiciyim\s+zaten|şoför\s+giriş|şoförüm)/i)
       TelegramService.send_contact_request(
         chat_id: chat_id,
-        text: "🚖 *Şoför Girişi*\n\nAşağıdaki butona basıp telefon numaranızı paylaşın — kayıt varsa panelinize bağlanırsınız.\nYoksa 'kaydol Ad /9053..., PLAKA' yazarak saniyeler içinde kayıt olabilirsiniz."
+        text: "🚖 *Şoför / Taksici Girişi*\n\nHarika! Sizi şoför panelinize bağlayabilmemiz için aşağıdaki **📱 Numaramı Paylaş** butonuna dokunun.\n\nEğer henüz sisteme kayıtlı değilseniz:\n`kaydol Ad Soyad, 0532xxxxxxx, 34 ABC 123` yazarak anında kaydolabilirsiniz."
       )
       return :menu
     end
