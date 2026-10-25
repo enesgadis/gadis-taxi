@@ -43,22 +43,51 @@ class AssistantService
   P
 
   # Doğal dili → hizmet talebi parametreleri (Anahtar öncelik sırası:
-  # Gemini → OpenAI → kurallı ayrıştırıcı). history: [{role:"user|bot", text:...}]
+  # Gemini → DeepSeek → kurallı ayrıştırıcı). history: [{role:"user|bot", text:...}]
   def self.parse(text:, profile: {}, role: nil, history: [])
+    context = { rol: role.presence || "passenger", gecmis: history }
+    
+    # 1. Gemini dene (ücretsiz modeller & çoklu anahtar)
     if ENV["GEMINI_API_KEY"].present?
-      deep_symbolize(gemini_parse(text, profile, SYSTEM_PROMPT_DISPATCH, context: { rol: role.presence || "passenger", gecmis: history }))
-    else
-      deep_symbolize(rule_parse(text, profile))
+      begin
+        return deep_symbolize(gemini_parse(text, profile, SYSTEM_PROMPT_DISPATCH, context: context))
+      rescue StandardError => e
+        Rails.logger.warn "[Assistant] Gemini başarısız: #{e.message}, DeepSeek deneniyor..."
+      end
     end
+
+    # 2. DeepSeek dene (eğer DEEPSEEK_API_KEY tanımlıysa)
+    if ENV["DEEPSEEK_API_KEY"].present?
+      begin
+        return deep_symbolize(deepseek_parse(text, profile, SYSTEM_PROMPT_DISPATCH, context: context))
+      rescue StandardError => e
+        Rails.logger.warn "[Assistant] DeepSeek başarısız: #{e.message}"
+      end
+    end
+
+    # 3. Son çare: Kurallı ayrıştırıcı
+    deep_symbolize(rule_parse(text, profile))
   end
 
   # Şikayet analizi
   def self.analyze_complaint(text:, profile: {}, context: {})
     if ENV["GEMINI_API_KEY"].present?
-      deep_symbolize(gemini_parse(text, profile, SYSTEM_PROMPT_COMPLAINT, context: context))
-    else
-      deep_symbolize(rule_complaint(text))
+      begin
+        return deep_symbolize(gemini_parse(text, profile, SYSTEM_PROMPT_COMPLAINT, context: context))
+      rescue StandardError => e
+        Rails.logger.warn "[Assistant] Gemini şikayet başarısız: #{e.message}"
+      end
     end
+
+    if ENV["DEEPSEEK_API_KEY"].present?
+      begin
+        return deep_symbolize(deepseek_parse(text, profile, SYSTEM_PROMPT_COMPLAINT, context: context))
+      rescue StandardError => e
+        Rails.logger.warn "[Assistant] DeepSeek şikayet başarısız: #{e.message}"
+      end
+    end
+
+    deep_symbolize(rule_complaint(text))
   end
 
   def self.deep_symbolize(hash)
@@ -133,13 +162,39 @@ class AssistantService
     content = gemini_generate(system_prompt: prompt, user_text: user_msg)
     raise "boş yanıt" if content.blank?
     JSON.parse(content)
-  rescue StandardError => e
-    Rails.logger.warn "[Assistant] Gemini hata: #{e.message} → kurallı ayrıştırıcıya düşüldü"
-    if prompt == SYSTEM_PROMPT_COMPLAINT
-      rule_complaint(text)
-    else
-      rule_parse(text, profile)
+  end
+
+  # --- DeepSeek Entegrasyonu ---
+  def self.deepseek_parse(text, profile, prompt, context: {})
+    key = ENV.fetch("DEEPSEEK_API_KEY", "")
+    return nil if key.blank?
+
+    messages = [{ role: "system", content: prompt }]
+    if (h = context.with_indifferent_access.delete(:gecmis)).present?
+      h.reject { |m| m["text"].blank? }.last(8).each do |m|
+        messages << { role: m["role"] == "bot" ? "assistant" : "user", content: m["text"] }
+      end
     end
+    messages << { role: "user", content: "Kullanıcı: #{text}\nProfil: #{profile.to_json}" }
+
+    uri = URI("https://api.deepseek.com/chat/completions")
+    http = Net::HTTP.new(uri.host, uri.port)
+    http.use_ssl = true
+    http.read_timeout = 20
+    req = Net::HTTP::Post.new(uri.path, {
+      "Content-Type" => "application/json",
+      "Authorization" => "Bearer #{key}"
+    })
+    req.body = {
+      model: "deepseek-chat",
+      messages: messages,
+      response_format: { type: "json_object" }
+    }.to_json
+    res = http.request(req)
+    data = JSON.parse(res.body)
+    raw = data.dig("choices", 0, "message", "content")
+    raise "DeepSeek hata: #{data.dig('error', 'message') || res.code}" if raw.blank?
+    JSON.parse(raw)
   end
 
   # --- Kurallı şikayet ayrıştırıcı (anahtar yoksa) ---
