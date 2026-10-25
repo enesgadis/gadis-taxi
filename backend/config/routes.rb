@@ -23,6 +23,12 @@ Rails.application.routes.draw do
       post "cockpit/simulate_webhook" => "cockpit#simulate_webhook"
       post "cockpit/trigger_reminders" => "cockpit#trigger_reminders"
 
+      # Yönetici Şikayet Yönetim Masası
+      get  "complaints" => "complaints#index"
+      get  "complaints/:id" => "complaints#show"
+      post "complaints/:id/status" => "complaints#update_status"
+      post "complaints/:id/ai_resolve" => "complaints#ai_resolve"
+
       get  "tracking/ride/:id" => "tracking#ride_status"
       get  "tracking/nearby_taxis" => "tracking#nearby_taxis"
       get  "tracking/map" => "tracking#map"

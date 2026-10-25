@@ -73,8 +73,15 @@ class AiInboundService
     case result[:intent].to_s
     when "complaint"
       analysis = AssistantService.analyze_complaint(text: text.to_s, profile: profile.symbolize_keys)
+
+      # Yolcunun son sürüşünü bul (varsa şoför ve ride'ı otomatik bağla)
+      recent_ride = Ride.where(passenger: passenger).order(created_at: :desc).first
+      assigned_driver = recent_ride&.driver
+
       c = Complaint.create!(
         passenger: passenger,
+        driver: assigned_driver,
+        ride: recent_ride,
         raw_text: text.to_s,
         category: analysis[:category].presence || "other",
         severity: (analysis[:severity].presence || 1).to_i.clamp(1, 5),
@@ -83,6 +90,8 @@ class AiInboundService
         suggested_action: analysis[:suggested_action],
         channel: "telegram_passenger"
       )
+
+      # 1. Yolcuya onay mesajı
       notify(
         chat_id, channel,
         "🚨 Şikayetiniz kaydedildi.\n\n" \
@@ -93,6 +102,37 @@ class AiInboundService
         "#{analysis[:reply]}\n\n" \
         "Durumu görmek için *şikayetlerim* yazabilirsiniz."
       )
+
+      # 2. Şoföre Anında Bilgilendirme Gönder (Gerçek İletişim)
+      if assigned_driver&.telegram_id.present?
+        TelegramService.send_message(
+          chat_id: assigned_driver.telegram_id,
+          text: "⚠️ *ÖNEMLİ BİLDİRİM - Şikayet Kaydı (No: ##{c.id})*\n\n" \
+                "Az önceki yolculuğunuz hakkında bir şikayet iletildi:\n" \
+                "• Konu: #{c.category}\n" \
+                "• Müşteri İfadesi: \"#{text}\"\n" \
+                "• Önem Derecesi: #{c.severity}/5\n\n" \
+                "Operasyon ve yönetim birimimiz konuyu incelemeye aldı."
+        )
+      end
+
+      # 3. Yöneticiye (Admin) Anında Telegram Bildirimi (Eğer ADMIN_TELEGRAM_ID tanımlıysa)
+      admin_tg_id = ENV["ADMIN_TELEGRAM_ID"].presence
+      # Eğer şoförün kendisi testte adminse ya da tanımlıysa ona da düşür
+      if admin_tg_id.present?
+        frontend_url = ENV.fetch("FRONTEND_URL", "https://gadis-taxi-alpha.vercel.app")
+        TelegramService.send_message(
+          chat_id: admin_tg_id,
+          text: "🚨 *YENİ MÜŞTERİ ŞİKAYETİ DÜŞTÜ (No: ##{c.id})*\n\n" \
+                "👤 Yolcu: #{passenger.name} (#{passenger.phone})\n" \
+                "🚖 Şoför: #{assigned_driver&.name || 'Bilinmiyor'} (#{assigned_driver&.plate || '-'})\n" \
+                "📌 Kategori: #{c.category} | Önem: #{c.severity}/5\n" \
+                "💬 Metin: \"#{text}\"\n" \
+                "🤖 AI Önerisi: #{c.suggested_action}\n\n" \
+                "👉 İncelemek ve Onay/Ret vermek için: #{frontend_url}/admin"
+        )
+      end
+
       ChatMessage.log!(chat_key, "bot", "Şikayetiniz kaydedildi (No #{c.id}). #{analysis[:reply].presence}")
       { success: true, action: "complaint" }
     when "courier"
